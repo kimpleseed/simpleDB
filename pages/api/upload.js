@@ -4,9 +4,11 @@ import { supabase } from '../../lib/supabase'
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '50mb',
+      sizeLimit: '10mb', // 크기 제한을 줄임
     },
+    responseLimit: false,
   },
+  maxDuration: 30, // Vercel Pro 기준 30초
 }
 
 // 팔로워 수 필터 설정 (하드코딩)
@@ -105,7 +107,7 @@ function extractCreatorsFromAnyStructure(data) {
   return creators
 }
 
-// 크리에이터 데이터 파싱 (Python 코드 기반)
+// 크리에이터 데이터 파싱 (DB 저장 없이)
 async function parseCreators(data) {
   // baseResp 확인 (선택사항)
   const base = data.baseResp || {}
@@ -129,7 +131,6 @@ async function parseCreators(data) {
 
   for (const creator of creators) {
     console.log('=== 크리에이터 항목 분석 ===')
-    console.log('전체 객체:', JSON.stringify(creator, null, 2))
     
     // Python 코드와 동일한 구조로 데이터 추출
     const info = creator.creatorTTInfo || {}
@@ -161,7 +162,6 @@ async function parseCreators(data) {
     console.log('=== 추출된 필드들 ===')
     console.log('aioCreatorID:', creatorData.aioCreatorID)
     console.log('name:', creatorData.name)
-    console.log('bio:', creatorData.bio)
     console.log('email:', creatorData.email)
     console.log('followers:', creatorData.followers)
     console.log('sns:', creatorData.sns)
@@ -185,58 +185,27 @@ async function parseCreators(data) {
 
     console.log(`처리 중: ${dbData.name} (팔로워: ${dbData.followers})`)
 
-    // 팔로워 수 조건 확인 후 DB 저장
+    // 팔로워 수 조건 확인 (DB 저장은 건너뜀)
     if (isFollowerCountValid(dbData.followers)) {
-      console.log(`✓ 팔로워 조건 통과: ${dbData.name} (${dbData.followers}명)`)
-      console.log('저장할 데이터:', JSON.stringify(dbData, null, 2))
-      
-      try {
-        console.log('DB 저장 시도 중...')
-        const { data: insertedData, error } = await supabase
-          .from('creators')
-          .insert([dbData])
-          .select() // 저장된 데이터 반환
-        
-        console.log('Supabase 응답:', { insertedData, error })
-        
-        if (error) {
-          if (error.code === '23505') { // UNIQUE constraint violation
-            duplicateCount++
-            console.log(`◉ 중복됨: ${dbData.name} (ID: ${dbData.aioCreatorID})`)
-          } else {
-            console.error('Database error 상세:', {
-              code: error.code,
-              message: error.message,
-              details: error.details,
-              hint: error.hint
-            })
-          }
-        } else {
-          savedCount++
-          console.log(`✓ 저장 성공: ${dbData.name} (팔로워: ${dbData.followers?.toLocaleString()}, SNS: ${dbData.sns})`)
-          console.log('저장된 데이터:', insertedData)
-        }
-      } catch (err) {
-        console.error('DB 저장 중 예외 발생:', err)
-        console.error('예외 스택:', err.stack)
-      }
+      savedCount++
+      console.log(`✓ 조건 통과: ${dbData.name} (팔로워: ${dbData.followers?.toLocaleString()}, SNS: ${dbData.sns})`)
     } else {
       filteredCount++
       console.log(`✗ 필터됨: ${dbData.name} (팔로워: ${dbData.followers}) - 조건: ${MIN_FOLLOWERS} ~ ${MAX_FOLLOWERS}`)
     }
   }
 
-  console.log(`처리 완료: 총 ${summaries.length}개, 저장 ${savedCount}개, 중복 ${duplicateCount}개, 필터 ${filteredCount}개`)
+  console.log(`처리 완료: 총 ${summaries.length}개, 조건 통과 ${savedCount}개, 필터 ${filteredCount}개`)
   console.log(`팔로워 수 조건: ${MIN_FOLLOWERS.toLocaleString()} ~ ${MAX_FOLLOWERS.toLocaleString()}`)
 
   return {
     total: summaries.length,
     saved: savedCount,
-    duplicate: duplicateCount,
+    duplicate: 0, // DB 저장 안하므로 중복 체크 없음
     filtered: filteredCount,
     minFollowers: MIN_FOLLOWERS,
     maxFollowers: MAX_FOLLOWERS,
-    processedData: summaries // 전체 데이터 반환 (5개 제한 제거)
+    processedData: summaries // 전체 데이터 반환
   }
 }
 
@@ -246,43 +215,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Supabase 연결 확인
-    console.log('Supabase 연결 확인 중...')
-    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'OK' : 'Missing')
-    console.log('Supabase Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : 'Missing')
+    console.log('=== API 요청 시작 ===')
     
-    // 간단한 연결 테스트
+    // JSON 데이터를 안전하게 받기
+    let jsonData
     try {
-      const { data: testData, error: testError } = await supabase
-        .from('creators')
-        .select('count', { count: 'exact', head: true })
-      
-      if (testError) {
-        console.error('Supabase 연결 테스트 실패:', testError)
-      } else {
-        console.log('Supabase 연결 성공, 현재 레코드 수:', testData?.length || 0)
+      jsonData = req.body
+      if (!jsonData || typeof jsonData !== 'object') {
+        throw new Error('유효하지 않은 JSON 데이터')
       }
-    } catch (testErr) {
-      console.error('Supabase 테스트 중 예외:', testErr)
-    }
-
-    // JSON 데이터를 직접 받기
-    const jsonData = req.body
-
-    if (!jsonData) {
-      return res.status(400).json({ error: 'JSON 데이터가 없습니다.' })
+    } catch (parseError) {
+      console.error('JSON 파싱 오류:', parseError)
+      return res.status(400).json({ error: 'JSON 파싱 실패: ' + parseError.message })
     }
 
     const dataSize = JSON.stringify(jsonData).length
     console.log(`JSON 데이터 처리 시작: ${(dataSize / 1024 / 1024).toFixed(2)}MB (${dataSize.toLocaleString()}자)`)
 
+    // 크기 제한 확인
+    if (dataSize > 10 * 1024 * 1024) { // 10MB 제한
+      return res.status(413).json({ error: 'JSON 데이터가 너무 큽니다. (최대 10MB)' })
+    }
+
     // 데이터 구조 분석
     console.log('JSON 구조 분석:')
     console.log('- 최상위 키들:', Object.keys(jsonData))
     
-    // 크리에이터 데이터 파싱 및 저장
+    // 크리에이터 데이터 파싱 (DB 저장 없이)
     const result = await parseCreators(jsonData)
     
+    console.log('=== API 요청 완료 ===')
     res.status(200).json(result)
   } catch (error) {
     console.error('Upload error:', error)
