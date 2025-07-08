@@ -430,12 +430,72 @@ export default function Home() {
     // TSV 형태로 변환 (탭으로 구분)
     const tsvData = dataOnly.map(row => row.join('\t')).join('\n')
     
-    // 클립보드에 복사
-    navigator.clipboard.writeText(tsvData).then(() => {
+    // 클립보드 복사 (fallback 포함)
+    const copyToClipboard = (text) => {
+      // 최신 브라우저의 clipboard API 사용
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text)
+      }
+      
+      // 구식 브라우저 fallback
+      return new Promise((resolve, reject) => {
+        try {
+          const textArea = document.createElement('textarea')
+          textArea.value = text
+          textArea.style.position = 'fixed'
+          textArea.style.left = '-999999px'
+          textArea.style.top = '-999999px'
+          document.body.appendChild(textArea)
+          textArea.focus()
+          textArea.select()
+          
+          const successful = document.execCommand('copy')
+          document.body.removeChild(textArea)
+          
+          if (successful) {
+            resolve()
+          } else {
+            reject(new Error('execCommand failed'))
+          }
+        } catch (err) {
+          reject(err)
+        }
+      })
+    }
+    
+    copyToClipboard(tsvData).then(() => {
       alert(`${result.processedData.length}개 데이터가 복사되었습니다!\n(Excel이나 Google Sheets에 붙여넣기 가능)`)
     }).catch(err => {
       console.error('복사 실패:', err)
-      alert('복사에 실패했습니다. 브라우저가 클립보드 접근을 허용하지 않을 수 있습니다.')
+      
+      // 수동 복사를 위한 모달 창 표시
+      const copyText = tsvData
+      const userAgent = navigator.userAgent.toLowerCase()
+      
+      if (userAgent.includes('mobile') || userAgent.includes('tablet')) {
+        // 모바일 환경
+        const message = `복사 기능이 지원되지 않습니다.\n\n아래 데이터를 수동으로 복사해주세요:\n\n${copyText.substring(0, 500)}${copyText.length > 500 ? '...' : ''}`
+        alert(message)
+      } else {
+        // 데스크톱 환경 - 새 창으로 표시
+        const newWindow = window.open('', '_blank', 'width=600,height=400,scrollbars=yes')
+        if (newWindow) {
+          newWindow.document.write(`
+            <html>
+              <head><title>복사할 데이터</title></head>
+              <body>
+                <h3>아래 데이터를 선택하여 복사하세요 (Ctrl+A → Ctrl+C)</h3>
+                <textarea style="width:100%; height:300px; font-family:monospace;" readonly>${copyText}</textarea>
+                <br><br>
+                <button onclick="window.close()">닫기</button>
+              </body>
+            </html>
+          `)
+          newWindow.document.close()
+        } else {
+          alert('팝업이 차단되었습니다. 브라우저 설정을 확인해주세요.')
+        }
+      }
     })
   }
 
