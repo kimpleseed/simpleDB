@@ -1,0 +1,79 @@
+{
+  "baseResp": {
+    "StatusCode": 0
+  },
+  "creators": [
+    {
+      "aioCreatorID": "creator_001",
+      "creatorTTInfo": {
+        "nickName": "테스트크리에이터1",
+        "handleName": "@testcreator1",
+        "bio": "안녕하세요! 테스트 크리에이터입니다. contact@test.com",
+        "storeRegion": "KR",
+        "isBannedInTT": false
+      },
+      "statisticData": {
+        "overallPerformance": {
+          "followerCount": 5000,
+          "engagementRate": 4.5,
+          "medianViews": 25000
+        }
+      },
+      "esData": {
+        "price": {
+          "startingRate100k": 800,
+          "currency": "USD"
+        }
+      },
+      "recentItems": []
+    },
+    {
+      "aioCreatorID": "creator_002",
+      "creatorTTInfo": {
+        "nickName": "테스트크리에이터2",
+        "handleName": "@testcreator2",
+        "bio": "뷰티 크리에이터입니다. beauty@test.com",
+        "storeRegion": "KR",
+        "isBannedInTT": false
+      },
+      "statisticData": {
+        "overallPerformance": {
+          "followerCount": 15000,
+          "engagementRate": 6.2,
+          "medianViews": 45000
+        }
+      },
+      "esData": {
+        "price": {
+          "startingRate100k": 1200,
+          "currency": "USD"
+        }
+      },
+      "recentItems": []
+    },
+    {
+      "aioCreatorID": "creator_003",
+      "creatorTTInfo": {
+        "nickName": "테스트크리에이터3",
+        "handleName": "@testcreator3",
+        "bio": "게임 스트리머입니다.",
+        "storeRegion": "US",
+        "isBannedInTT": false
+      },
+      "statisticData": {
+        "overallPerformance": {
+          "followerCount": 500,
+          "engagementRate": 2.1,
+          "medianViews": 5000
+        }
+      },
+      "esData": {
+        "price": {
+          "startingRate100k": 300,
+          "currency": "USD"
+        }
+      },
+      "recentItems": []
+    }
+  ]
+} 
