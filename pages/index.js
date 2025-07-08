@@ -263,6 +263,18 @@ export default function Home() {
       setError(null)
       setResult(null)
 
+      // 데이터 크기 확인
+      const dataSize = JSON.stringify(jsonData).length
+      const maxSize = 8 * 1024 * 1024 // 8MB 제한 (여유분 고려)
+
+      console.log(`데이터 크기: ${(dataSize / 1024 / 1024).toFixed(2)}MB`)
+
+      if (dataSize > maxSize) {
+        setError(`데이터가 너무 큽니다. (${(dataSize / 1024 / 1024).toFixed(2)}MB / 최대 8MB)\n더 작은 데이터로 나누어 처리해주세요.`)
+        setUploading(false)
+        return
+      }
+
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: {
@@ -271,15 +283,29 @@ export default function Home() {
         body: JSON.stringify(jsonData),
       })
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
       const data = await response.json()
 
-      if (response.ok) {
-        setResult(data)
-      } else {
-        setError(data.error || '업로드 중 오류가 발생했습니다.')
+      if (data.error) {
+        throw new Error(data.error)
       }
+
+      setResult(data)
     } catch (err) {
-      setError(`JSON 파싱 실패: ${err.message}`)
+      console.error('업로드 오류:', err)
+      if (err.message.includes('JSON') || err.message.includes('파싱')) {
+        setError(`JSON 파싱 실패: ${err.message}\n"자동 수정" 버튼을 시도해보세요.`)
+      } else if (err.message.includes('too large') || err.message.includes('크기')) {
+        setError(`데이터 크기 초과: ${err.message}\n더 작은 데이터로 나누어 처리해주세요.`)
+      } else if (err.message.includes('timeout') || err.message.includes('시간')) {
+        setError(`처리 시간 초과: ${err.message}\nVercel 서버리스 함수의 시간 제한입니다.`)
+      } else {
+        setError(`업로드 실패: ${err.message}`)
+      }
     } finally {
       setUploading(false)
     }

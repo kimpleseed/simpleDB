@@ -1,10 +1,7 @@
-// API 설정 - Vercel 서버리스 환경에 최적화
+// API 설정 - bodyParser 비활성화하고 스트리밍 방식 사용
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: '5mb', // 더 작은 크기로 제한
-    },
-    responseLimit: '5mb',
+    bodyParser: false, // bodyParser 비활성화
   },
   maxDuration: 10, // Hobby 플랜 기준 10초
 }
@@ -233,6 +230,43 @@ async function parseCreators(data) {
   }
 }
 
+// 스트리밍으로 JSON 데이터 읽기
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let size = 0
+    const maxSize = 10 * 1024 * 1024 // 10MB 제한
+
+    req.on('data', (chunk) => {
+      size += chunk.length
+      if (size > maxSize) {
+        reject(new Error('Request too large'))
+        return
+      }
+      chunks.push(chunk)
+    })
+
+    req.on('end', () => {
+      try {
+        const buffer = Buffer.concat(chunks)
+        const body = buffer.toString('utf8')
+        resolve(body)
+      } catch (error) {
+        reject(error)
+      }
+    })
+
+    req.on('error', (error) => {
+      reject(error)
+    })
+
+    // 타임아웃 설정
+    setTimeout(() => {
+      reject(new Error('Request timeout'))
+    }, 9000) // 9초 타임아웃
+  })
+}
+
 export default async function handler(req, res) {
   // CORS 헤더 추가
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -257,20 +291,20 @@ export default async function handler(req, res) {
       return res.status(413).json({ error: 'Request too large (max 5MB)' })
     }
 
-    // JSON 데이터를 안전하게 받기
+    // 스트리밍으로 JSON 데이터 읽기
     let jsonData
+    let rawJsonString
     try {
-      // req.body가 이미 파싱된 경우
-      if (req.body && typeof req.body === 'object') {
-        jsonData = req.body
-      } else if (req.body && typeof req.body === 'string') {
-        // 문자열인 경우 파싱 시도
-        jsonData = JSON.parse(req.body)
-      } else {
-        throw new Error('No valid JSON data received')
+      rawJsonString = await getRawBody(req)
+      
+      // 기본 유효성 검사
+      if (!rawJsonString || typeof rawJsonString !== 'string') {
+        throw new Error('No valid JSON string received')
       }
 
-      // 기본 유효성 검사
+      // JSON 파싱
+      jsonData = JSON.parse(rawJsonString)
+
       if (!jsonData || typeof jsonData !== 'object') {
         throw new Error('Invalid JSON object')
       }
@@ -286,17 +320,17 @@ export default async function handler(req, res) {
     // 데이터 크기 계산 (안전하게)
     let dataSize = 0
     try {
-      dataSize = JSON.stringify(jsonData).length
+      dataSize = rawJsonString.length
     } catch (stringifyError) {
-      console.error('JSON stringify 오류:', stringifyError)
+      console.error('크기 계산 오류:', stringifyError)
       dataSize = 'unknown'
     }
 
     console.log(`JSON 데이터 처리 시작: ${typeof dataSize === 'number' ? (dataSize / 1024 / 1024).toFixed(2) + 'MB' : dataSize} (${typeof dataSize === 'number' ? dataSize.toLocaleString() : 'unknown'}자)`)
 
     // 크기 제한 확인
-    if (typeof dataSize === 'number' && dataSize > 5 * 1024 * 1024) {
-      return res.status(413).json({ error: 'JSON 데이터가 너무 큽니다. (최대 5MB)' })
+    if (typeof dataSize === 'number' && dataSize > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: 'JSON 데이터가 너무 큽니다. (최대 10MB)' })
     }
 
     // 데이터 구조 분석 (안전하게)
