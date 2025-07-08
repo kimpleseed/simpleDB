@@ -1,12 +1,12 @@
-// API 설정 - 대용량 데이터 처리를 위한 설정
+// API 설정 - Vercel 서버리스 환경에 최적화
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '10mb', // 크기 제한을 줄임
+      sizeLimit: '5mb', // 더 작은 크기로 제한
     },
-    responseLimit: false,
+    responseLimit: '5mb',
   },
-  maxDuration: 30, // Vercel Pro 기준 30초
+  maxDuration: 10, // Hobby 플랜 기준 10초
 }
 
 // 팔로워 수 필터 설정 (하드코딩)
@@ -15,94 +15,120 @@ const MAX_FOLLOWERS = 10000000000
 
 // 이메일 추출 함수
 function extractEmailFromBio(bio) {
-  if (!bio) return null
-  
-  const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/
-  const matches = bio.match(emailPattern)
-  return matches ? matches[0] : null
+  try {
+    if (!bio || typeof bio !== 'string') return null
+    
+    const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/
+    const matches = bio.match(emailPattern)
+    return matches ? matches[0] : null
+  } catch (error) {
+    console.error('이메일 추출 오류:', error)
+    return null
+  }
 }
 
 // 팔로워 수 유효성 검사
 function isFollowerCountValid(followerCount) {
-  if (followerCount === null || followerCount === undefined) {
+  try {
+    if (followerCount === null || followerCount === undefined) {
+      return false
+    }
+    const count = parseInt(followerCount)
+    if (isNaN(count)) return false
+    return MIN_FOLLOWERS <= count && count <= MAX_FOLLOWERS
+  } catch (error) {
+    console.error('팔로워 수 검증 오류:', error)
     return false
   }
-  return MIN_FOLLOWERS <= followerCount && followerCount <= MAX_FOLLOWERS
 }
 
 // 크리에이터 데이터인지 확인하는 함수
 function isValidCreatorData(item) {
-  // 이미지 데이터나 기타 불필요한 데이터 필터링
-  if (item.format && item.imageUrl) {
-    return false // 이미지 데이터
-  }
-  
-  // 크리에이터 관련 필드가 하나라도 있으면 유효한 것으로 간주
-  const creatorFields = [
-    'aioCreatorID', 'creatorTTInfo', 'statisticData',
-    'nickName', 'handleName', 'bio', 'followerCount',
-    'name', 'username', 'followers', 'id'
-  ]
-  
-  return creatorFields.some(field => {
-    if (item[field] !== undefined) return true
-    if (item.creatorTTInfo && item.creatorTTInfo[field] !== undefined) return true
-    if (item.statisticData?.overallPerformance && item.statisticData.overallPerformance[field] !== undefined) return true
+  try {
+    if (!item || typeof item !== 'object') return false
+    
+    // 이미지 데이터나 기타 불필요한 데이터 필터링
+    if (item.format && item.imageUrl) {
+      return false // 이미지 데이터
+    }
+    
+    // 크리에이터 관련 필드가 하나라도 있으면 유효한 것으로 간주
+    const creatorFields = [
+      'aioCreatorID', 'creatorTTInfo', 'statisticData',
+      'nickName', 'handleName', 'bio', 'followerCount',
+      'name', 'username', 'followers', 'id'
+    ]
+    
+    return creatorFields.some(field => {
+      if (item[field] !== undefined) return true
+      if (item.creatorTTInfo && item.creatorTTInfo[field] !== undefined) return true
+      if (item.statisticData?.overallPerformance && item.statisticData.overallPerformance[field] !== undefined) return true
+      return false
+    })
+  } catch (error) {
+    console.error('크리에이터 데이터 검증 오류:', error)
     return false
-  })
+  }
 }
 
 // 다양한 JSON 구조에서 크리에이터 데이터 추출
 function extractCreatorsFromAnyStructure(data) {
-  let creators = []
-  
-  // 1. 표준 구조: data.creators
-  if (data.creators && Array.isArray(data.creators)) {
-    creators = data.creators.filter(isValidCreatorData)
-    console.log('표준 creators 배열 발견:', creators.length + '개 (유효한 크리에이터)')
-    return creators
-  }
-  
-  // 2. 다른 가능한 구조들 탐색
-  console.log('표준 creators 배열 없음, 다른 구조 탐색 중...')
-  
-  // JSON의 모든 키를 확인하여 배열 찾기
-  function findArraysInObject(obj, path = '') {
-    const arrays = []
+  try {
+    let creators = []
     
-    if (Array.isArray(obj)) {
-      // 배열에서 유효한 크리에이터 데이터만 필터링
-      const validCreators = obj.filter(isValidCreatorData)
-      if (validCreators.length > 0) {
-        arrays.push({ path, data: validCreators, totalLength: obj.length })
-      }
-    } else if (obj && typeof obj === 'object') {
-      for (const [key, value] of Object.entries(obj)) {
-        const newPath = path ? `${path}.${key}` : key
-        arrays.push(...findArraysInObject(value, newPath))
-      }
+    // 1. 표준 구조: data.creators
+    if (data.creators && Array.isArray(data.creators)) {
+      creators = data.creators.filter(isValidCreatorData)
+      console.log('표준 creators 배열 발견:', creators.length + '개 (유효한 크리에이터)')
+      return creators
     }
     
-    return arrays
+    // 2. 다른 가능한 구조들 탐색
+    console.log('표준 creators 배열 없음, 다른 구조 탐색 중...')
+    
+    // JSON의 모든 키를 확인하여 배열 찾기 (깊이 제한)
+    function findArraysInObject(obj, path = '', depth = 0) {
+      if (depth > 3) return [] // 깊이 제한으로 성능 보호
+      
+      const arrays = []
+      
+      if (Array.isArray(obj)) {
+        // 배열에서 유효한 크리에이터 데이터만 필터링
+        const validCreators = obj.filter(isValidCreatorData)
+        if (validCreators.length > 0) {
+          arrays.push({ path, data: validCreators, totalLength: obj.length })
+        }
+      } else if (obj && typeof obj === 'object') {
+        for (const [key, value] of Object.entries(obj)) {
+          const newPath = path ? `${path}.${key}` : key
+          arrays.push(...findArraysInObject(value, newPath, depth + 1))
+        }
+      }
+      
+      return arrays
+    }
+    
+    const allArrays = findArraysInObject(data)
+    console.log('발견된 크리에이터 배열들:', allArrays.map(a => ({ 
+      path: a.path, 
+      validCreators: a.data.length, 
+      totalItems: a.totalLength 
+    })))
+    
+    // 가장 많은 유효한 크리에이터 데이터를 가진 배열 선택
+    if (allArrays.length > 0) {
+      const bestArray = allArrays.reduce((max, current) => 
+        current.data.length > max.data.length ? current : max
+      )
+      creators = bestArray.data
+      console.log(`최적 배열 선택: ${bestArray.path} (${creators.length}개 유효한 크리에이터)`)
+    }
+    
+    return creators
+  } catch (error) {
+    console.error('크리에이터 데이터 추출 오류:', error)
+    return []
   }
-  
-  const allArrays = findArraysInObject(data)
-  console.log('발견된 크리에이터 배열들:', allArrays.map(a => ({ 
-    path: a.path, 
-    validCreators: a.data.length, 
-    totalItems: a.totalLength 
-  })))
-  
-  // 가장 많은 유효한 크리에이터 데이터를 가진 배열 선택
-  if (allArrays.length > 0) {
-    const bestArray = allArrays.reduce((max, current) => 
-      current.data.length > max.data.length ? current : max
-    )
-    creators = bestArray.data
-    console.log(`최적 배열 선택: ${bestArray.path} (${creators.length}개 유효한 크리에이터)`)
-  }
-  
-  return creators
 }
 
 // 크리에이터 데이터 파싱 (DB 저장 없이)
@@ -208,44 +234,124 @@ async function parseCreators(data) {
 }
 
 export default async function handler(req, res) {
+  // CORS 헤더 추가
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end()
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const startTime = Date.now()
+  console.log('=== API 요청 시작 ===', new Date().toISOString())
+
   try {
-    console.log('=== API 요청 시작 ===')
-    
+    // 요청 크기 확인
+    const contentLength = req.headers['content-length']
+    if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Request too large (max 5MB)' })
+    }
+
     // JSON 데이터를 안전하게 받기
     let jsonData
     try {
-      jsonData = req.body
-      if (!jsonData || typeof jsonData !== 'object') {
-        throw new Error('유효하지 않은 JSON 데이터')
+      // req.body가 이미 파싱된 경우
+      if (req.body && typeof req.body === 'object') {
+        jsonData = req.body
+      } else if (req.body && typeof req.body === 'string') {
+        // 문자열인 경우 파싱 시도
+        jsonData = JSON.parse(req.body)
+      } else {
+        throw new Error('No valid JSON data received')
       }
+
+      // 기본 유효성 검사
+      if (!jsonData || typeof jsonData !== 'object') {
+        throw new Error('Invalid JSON object')
+      }
+
     } catch (parseError) {
-      console.error('JSON 파싱 오류:', parseError)
-      return res.status(400).json({ error: 'JSON 파싱 실패: ' + parseError.message })
+      console.error('JSON 파싱 오류:', parseError.message)
+      return res.status(400).json({ 
+        error: 'JSON 파싱 실패: ' + parseError.message,
+        details: 'JSON 형식이 올바른지 확인해주세요.'
+      })
     }
 
-    const dataSize = JSON.stringify(jsonData).length
-    console.log(`JSON 데이터 처리 시작: ${(dataSize / 1024 / 1024).toFixed(2)}MB (${dataSize.toLocaleString()}자)`)
+    // 데이터 크기 계산 (안전하게)
+    let dataSize = 0
+    try {
+      dataSize = JSON.stringify(jsonData).length
+    } catch (stringifyError) {
+      console.error('JSON stringify 오류:', stringifyError)
+      dataSize = 'unknown'
+    }
+
+    console.log(`JSON 데이터 처리 시작: ${typeof dataSize === 'number' ? (dataSize / 1024 / 1024).toFixed(2) + 'MB' : dataSize} (${typeof dataSize === 'number' ? dataSize.toLocaleString() : 'unknown'}자)`)
 
     // 크기 제한 확인
-    if (dataSize > 10 * 1024 * 1024) { // 10MB 제한
-      return res.status(413).json({ error: 'JSON 데이터가 너무 큽니다. (최대 10MB)' })
+    if (typeof dataSize === 'number' && dataSize > 5 * 1024 * 1024) {
+      return res.status(413).json({ error: 'JSON 데이터가 너무 큽니다. (최대 5MB)' })
     }
 
-    // 데이터 구조 분석
+    // 데이터 구조 분석 (안전하게)
     console.log('JSON 구조 분석:')
-    console.log('- 최상위 키들:', Object.keys(jsonData))
+    try {
+      const keys = Object.keys(jsonData)
+      console.log('- 최상위 키들:', keys.slice(0, 10)) // 처음 10개만 로그
+      if (keys.length > 10) {
+        console.log(`- 총 ${keys.length}개 키 (처음 10개만 표시)`)
+      }
+    } catch (keysError) {
+      console.error('키 분석 오류:', keysError)
+    }
     
-    // 크리에이터 데이터 파싱 (DB 저장 없이)
+    // 타임아웃 체크
+    if (Date.now() - startTime > 8000) { // 8초 제한
+      return res.status(408).json({ error: '처리 시간 초과' })
+    }
+
+    // 크리에이터 데이터 파싱
     const result = await parseCreators(jsonData)
     
-    console.log('=== API 요청 완료 ===')
-    res.status(200).json(result)
+    const processingTime = Date.now() - startTime
+    console.log(`=== API 요청 완료 === (${processingTime}ms)`)
+    
+    res.status(200).json({
+      ...result,
+      processingTime: processingTime
+    })
+
   } catch (error) {
-    console.error('Upload error:', error)
-    res.status(500).json({ error: error.message })
+    const processingTime = Date.now() - startTime
+    console.error('=== API 오류 ===')
+    console.error('오류 메시지:', error.message)
+    console.error('오류 스택:', error.stack)
+    console.error('처리 시간:', processingTime + 'ms')
+    
+    // 에러 타입별 처리
+    if (error.message.includes('timeout') || error.message.includes('시간')) {
+      return res.status(408).json({ 
+        error: '처리 시간 초과: ' + error.message,
+        processingTime: processingTime
+      })
+    }
+    
+    if (error.message.includes('memory') || error.message.includes('메모리')) {
+      return res.status(507).json({ 
+        error: '메모리 부족: ' + error.message,
+        processingTime: processingTime
+      })
+    }
+
+    res.status(500).json({ 
+      error: error.message || '서버 내부 오류',
+      processingTime: processingTime
+    })
   }
 }
