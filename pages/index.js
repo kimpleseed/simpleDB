@@ -387,6 +387,32 @@ export default function Home() {
     }
   }
 
+  const handleCopyResults = () => {
+    if (!result || !result.processedData || result.processedData.length === 0) {
+      alert('복사할 데이터가 없습니다.')
+      return
+    }
+
+    // 데이터만 추출 (헤더 제외)
+    const dataOnly = result.processedData.map(item => [
+      item.name || '',
+      item.email || '',
+      item.followers || 0,
+      item.sns || ''
+    ])
+
+    // TSV 형태로 변환 (탭으로 구분)
+    const tsvData = dataOnly.map(row => row.join('\t')).join('\n')
+    
+    // 클립보드에 복사
+    navigator.clipboard.writeText(tsvData).then(() => {
+      alert(`${result.processedData.length}개 데이터가 복사되었습니다!\n(Excel이나 Google Sheets에 붙여넣기 가능)`)
+    }).catch(err => {
+      console.error('복사 실패:', err)
+      alert('복사에 실패했습니다. 브라우저가 클립보드 접근을 허용하지 않을 수 있습니다.')
+    })
+  }
+
   return (
     <div className="container">
       <Head>
@@ -482,11 +508,28 @@ export default function Home() {
 
         {result && (
           <div className="result">
-            <h2>처리 결과</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2>처리 결과</h2>
+              <button
+                onClick={handleCopyResults}
+                className="copyResultButton"
+                disabled={!result.processedData || result.processedData.length === 0}
+                style={{
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                📋 결과 복사
+              </button>
+            </div>
             <div className="resultStats">
               <p><strong>총 처리:</strong> {result.total}개</p>
-              <p><strong>새로 저장:</strong> {result.saved}개</p>
-              <p><strong>중복 제외:</strong> {result.duplicate}개</p>
+              <p><strong>조건 통과:</strong> {result.saved}개</p>
               <p><strong>필터됨:</strong> {result.filtered}개</p>
             </div>
             <div className="followerInfo">

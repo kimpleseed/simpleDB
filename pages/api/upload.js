@@ -1,5 +1,3 @@
-import { supabase } from '../../lib/supabase'
-
 // API 설정 - 대용량 데이터 처리를 위한 설정
 export const config = {
   api: {
