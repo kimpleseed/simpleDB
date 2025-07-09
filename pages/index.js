@@ -512,7 +512,7 @@ export default function Home() {
           SimpleDB Creator Upload
         </h1>
         <p className="subtitle">
-          JSON 데이터에서 name, email, followers, sns 정보를 추출하여 DB에 저장 (모든 JSON 구조 지원)
+          JSON 데이터에서 handleName, email, followers, TikTok URL 정보를 추출하여 처리 (모든 JSON 구조 지원)
         </p>
 
         <div className="uploadSection">
@@ -629,10 +629,10 @@ export default function Home() {
                   <table>
                     <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white' }}>
                       <tr>
-                        <th>Name</th>
+                        <th>Handle Name</th>
                         <th>Email</th>
                         <th>Followers</th>
-                        <th>SNS</th>
+                        <th>TikTok URL</th>
                       </tr>
                     </thead>
                     <tbody>
