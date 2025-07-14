@@ -5,8 +5,8 @@ export default function Home() {
   const [jsonText, setJsonText] = useState('')
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
-  const [jsonValid, setJsonValid] = useState(null)
+      const [error, setError] = useState(null)
+    const [jsonValid, setJsonValid] = useState(null)
 
   // 더 강력한 JSON 파싱 함수
   const parseJSONLenient = (text) => {
@@ -413,91 +413,60 @@ export default function Home() {
     }
   }
 
-  const handleCopyResults = () => {
-    if (!result || !result.processedData || result.processedData.length === 0) {
-      alert('복사할 데이터가 없습니다.')
-      return
-    }
-
-    // 데이터만 추출 (헤더 제외)
-    const dataOnly = result.processedData.map(item => [
-      item.name || '',
-      item.email || '',
-      item.followers || 0,
-      item.sns || ''
-    ])
-
-    // TSV 형태로 변환 (탭으로 구분)
-    const tsvData = dataOnly.map(row => row.join('\t')).join('\n')
+  const copyResults = async () => {
+    if (!result || !result.processedData) return;
     
-    // 클립보드 복사 (fallback 포함)
-    const copyToClipboard = (text) => {
-      // 최신 브라우저의 clipboard API 사용
+    try {
+      // 데이터만 탭으로 구분하여 문자열 생성 (헤더 제외)
+      const dataRows = result.processedData.map(item => [
+        item.name || '',
+        item.email || '', 
+        item.price || '',
+        item.engagement || '',
+        typeof item.followers === 'number' ? item.followers.toLocaleString() : '',
+        item.sns || ''
+      ].join('\t'));
+      
+      const dataOnlyText = dataRows.join('\n');
+      
+      // 클립보드 복사 시도 (여러 방법 시도)
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text)
-      }
-      
-      // 구식 브라우저 fallback
-      return new Promise((resolve, reject) => {
-        try {
-          const textArea = document.createElement('textarea')
-          textArea.value = text
-          textArea.style.position = 'fixed'
-          textArea.style.left = '-999999px'
-          textArea.style.top = '-999999px'
-          document.body.appendChild(textArea)
-          textArea.focus()
-          textArea.select()
-          
-          const successful = document.execCommand('copy')
-          document.body.removeChild(textArea)
-          
-          if (successful) {
-            resolve()
-          } else {
-            reject(new Error('execCommand failed'))
-          }
-        } catch (err) {
-          reject(err)
-        }
-      })
-    }
-    
-    copyToClipboard(tsvData).then(() => {
-      alert(`${result.processedData.length}개 데이터가 복사되었습니다!\n(Excel이나 Google Sheets에 붙여넣기 가능)`)
-    }).catch(err => {
-      console.error('복사 실패:', err)
-      
-      // 수동 복사를 위한 모달 창 표시
-      const copyText = tsvData
-      const userAgent = navigator.userAgent.toLowerCase()
-      
-      if (userAgent.includes('mobile') || userAgent.includes('tablet')) {
-        // 모바일 환경
-        const message = `복사 기능이 지원되지 않습니다.\n\n아래 데이터를 수동으로 복사해주세요:\n\n${copyText.substring(0, 500)}${copyText.length > 500 ? '...' : ''}`
-        alert(message)
+        await navigator.clipboard.writeText(dataOnlyText);
+        alert(`${result.processedData.length}개 데이터가 복사되었습니다!\n(Excel이나 Google Sheets에 붙여넣기 가능)`);
+      } else if (document.execCommand) {
+        // 폴백 방법
+        const textArea = document.createElement('textarea');
+        textArea.value = dataOnlyText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert(`${result.processedData.length}개 데이터가 복사되었습니다!\n(Excel이나 Google Sheets에 붙여넣기 가능)`);
       } else {
-        // 데스크톱 환경 - 새 창으로 표시
-        const newWindow = window.open('', '_blank', 'width=600,height=400,scrollbars=yes')
+        // 마지막 폴백 - 새 창으로 표시
+        const newWindow = window.open('', '_blank', 'width=600,height=400,scrollbars=yes');
         if (newWindow) {
           newWindow.document.write(`
             <html>
               <head><title>복사할 데이터</title></head>
               <body>
                 <h3>아래 데이터를 선택하여 복사하세요 (Ctrl+A → Ctrl+C)</h3>
-                <textarea style="width:100%; height:300px; font-family:monospace;" readonly>${copyText}</textarea>
+                <textarea style="width:100%; height:300px; font-family:monospace;" readonly>${dataOnlyText}</textarea>
                 <br><br>
                 <button onclick="window.close()">닫기</button>
               </body>
             </html>
-          `)
-          newWindow.document.close()
+          `);
+          newWindow.document.close();
         } else {
-          alert('팝업이 차단되었습니다. 브라우저 설정을 확인해주세요.')
+          alert('팝업이 차단되었습니다. 브라우저 설정을 확인해주세요.');
         }
       }
-    })
-  }
+    } catch (error) {
+      console.error('복사 실패:', error);
+      alert('복사에 실패했습니다. 브라우저 설정을 확인해주세요.');
+    }
+  };
 
   return (
     <div className="container">
@@ -596,22 +565,22 @@ export default function Home() {
           <div className="result">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2>처리 결과</h2>
-              <button
-                onClick={handleCopyResults}
-                className="copyResultButton"
-                disabled={!result.processedData || result.processedData.length === 0}
-                style={{
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                📋 결과 복사
-              </button>
+                              <button
+                  onClick={copyResults}
+                  className="copyResultButton"
+                  disabled={!result.processedData || result.processedData.length === 0}
+                  style={{
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                                >
+                  📋 결과 복사
+                </button>
             </div>
             <div className="resultStats">
               <p><strong>총 처리:</strong> {result.total}개</p>
@@ -627,21 +596,31 @@ export default function Home() {
                 <h3>처리된 데이터 전체 ({result.processedData.length}개)</h3>
                 <div className="dataTable" style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   <table>
-                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white' }}>
-                      <tr>
-                        <th>Handle Name</th>
-                        <th>Email</th>
-                        <th>Followers</th>
-                        <th>TikTok URL</th>
+                    <thead>
+                      <tr style={{backgroundColor: '#f8f9fa'}}>
+                        <th style={{padding: '12px', border: '1px solid #ddd', fontWeight: 'bold', position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>Handle Name</th>
+                        <th style={{padding: '12px', border: '1px solid #ddd', fontWeight: 'bold', position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>Email</th>
+                        <th style={{padding: '12px', border: '1px solid #ddd', fontWeight: 'bold', position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>Price</th>
+                        <th style={{padding: '12px', border: '1px solid #ddd', fontWeight: 'bold', position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>Engagement</th>
+                        <th style={{padding: '12px', border: '1px solid #ddd', fontWeight: 'bold', position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>Followers</th>
+                        <th style={{padding: '12px', border: '1px solid #ddd', fontWeight: 'bold', position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>TikTok URL</th>
                       </tr>
                     </thead>
                     <tbody>
                       {result.processedData.map((item, index) => (
                         <tr key={index}>
-                          <td>{item.name || '-'}</td>
-                          <td>{item.email || '-'}</td>
-                          <td style={{ textAlign: 'right' }}>{item.followers?.toLocaleString() || 0}</td>
-                          <td>{item.sns || '-'}</td>
+                          <td style={{padding: '8px', border: '1px solid #ddd'}}>{item.name || 'N/A'}</td>
+                          <td style={{padding: '8px', border: '1px solid #ddd'}}>{item.email || 'N/A'}</td>
+                          <td style={{padding: '8px', border: '1px solid #ddd'}}>{item.price || 'N/A'}</td>
+                          <td style={{padding: '8px', border: '1px solid #ddd'}}>{item.engagement || 'N/A'}</td>
+                          <td style={{padding: '8px', border: '1px solid #ddd'}}>{typeof item.followers === 'number' ? item.followers.toLocaleString() : 'N/A'}</td>
+                          <td style={{padding: '8px', border: '1px solid #ddd'}}>
+                            {item.sns ? (
+                              <a href={item.sns} target="_blank" rel="noopener noreferrer" style={{color: '#007bff', textDecoration: 'none'}}>
+                                {item.sns}
+                              </a>
+                            ) : 'N/A'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

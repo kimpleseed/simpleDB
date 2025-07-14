@@ -167,15 +167,15 @@ async function parseCreators(data) {
       aioCreatorID: creator.aioCreatorID,
       name: info.handleName, // handleName을 name으로 사용
       email: email,
+      price: price.startingRate100k ? `${(price.startingRate100k / 100000).toFixed(1)} USD` : null, // Price 계산
+      engagement: perf.engagementRate ? `${(perf.engagementRate * 100).toFixed(1)}%` : null, // Engagement 계산
       followers: perf.followerCount,
       sns: info.handleName ? `https://www.tiktok.com/@${info.handleName}` : '', // TikTok URL 생성
       // 추가 정보들
       bio: bio,
       country: info.storeRegion,
       isBanned: info.isBannedInTT,
-      engagementRate: perf.engagementRate,
       medianViews: perf.medianViews,
-      startingRate100k: price.startingRate100k,
       currency: price.currency,
       recentItemsCount: creator.recentItems?.length || 0
     }
@@ -184,6 +184,8 @@ async function parseCreators(data) {
     console.log('aioCreatorID:', creatorData.aioCreatorID)
     console.log('name (handleName):', creatorData.name)
     console.log('email:', creatorData.email)
+    console.log('price:', creatorData.price)
+    console.log('engagement:', creatorData.engagement)
     console.log('followers:', creatorData.followers)
     console.log('sns (TikTok URL):', creatorData.sns)
 
@@ -198,6 +200,8 @@ async function parseCreators(data) {
       aioCreatorID: creatorData.aioCreatorID,
       name: creatorData.name || '알 수 없음', // handleName 사용
       email: creatorData.email,
+      price: creatorData.price, // Price 추가
+      engagement: creatorData.engagement, // Engagement 추가
       followers: parseInt(creatorData.followers) || 0,
       sns: creatorData.sns || '' // TikTok URL 사용
     }
