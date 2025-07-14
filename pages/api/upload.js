@@ -252,6 +252,10 @@ function getRawBody(req) {
 
     req.on('end', () => {
       try {
+        if (chunks.length === 0) {
+          resolve('')
+          return
+        }
         const buffer = Buffer.concat(chunks)
         const body = buffer.toString('utf8')
         resolve(body)
@@ -267,7 +271,7 @@ function getRawBody(req) {
     // 타임아웃 설정
     setTimeout(() => {
       reject(new Error('Request timeout'))
-    }, 9000) // 9초 타임아웃
+    }, 8000) // 8초 타임아웃 (Vercel의 10초 제한보다 여유있게)
   })
 }
 
@@ -289,6 +293,9 @@ export default async function handler(req, res) {
   console.log('=== API 요청 시작 ===', new Date().toISOString())
 
   try {
+    // Content-Type 확인
+    const contentType = req.headers['content-type'] || ''
+    
     // 요청 크기 확인
     const contentLength = req.headers['content-length']
     if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
@@ -301,10 +308,21 @@ export default async function handler(req, res) {
     try {
       rawJsonString = await getRawBody(req)
       
+      // 빈 요청 체크
+      if (!rawJsonString || rawJsonString.trim() === '') {
+        console.error('Empty request body received')
+        return res.status(400).json({ 
+          error: 'Empty request body',
+          details: '요청 본문이 비어있습니다. JSON 데이터를 전송해주세요.'
+        })
+      }
+
       // 기본 유효성 검사
       if (!rawJsonString || typeof rawJsonString !== 'string') {
         throw new Error('No valid JSON string received')
       }
+
+      console.log('Received data size:', rawJsonString.length, 'bytes')
 
       // JSON 파싱
       jsonData = JSON.parse(rawJsonString)
@@ -315,9 +333,26 @@ export default async function handler(req, res) {
 
     } catch (parseError) {
       console.error('JSON 파싱 오류:', parseError.message)
+      console.error('Raw data length:', rawJsonString?.length || 0)
+      console.error('First 100 chars:', rawJsonString?.substring(0, 100) || 'N/A')
+      
+      // Vercel 환경에서 더 자세한 에러 정보 제공
+      const errorInfo = {
+        message: parseError.message,
+        type: parseError.name,
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length'],
+        dataLength: rawJsonString?.length || 0
+      }
+      
+      console.error('Error info:', JSON.stringify(errorInfo, null, 2))
+      
       return res.status(400).json({ 
         error: 'JSON 파싱 실패: ' + parseError.message,
-        details: 'JSON 형식이 올바른지 확인해주세요.'
+        details: 'JSON 형식이 올바른지 확인해주세요.',
+        hint: parseError.message.includes('Unexpected end') ? 
+          '데이터가 완전히 전송되지 않았을 수 있습니다.' : 
+          '올바른 JSON 형식인지 확인해주세요.'
       })
     }
 
