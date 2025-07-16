@@ -415,3 +415,83 @@
     padding: 0.5rem;
   }
 } 
+/* 탭 네비게이션 스타일 */
+.tabNavigation {
+  display: flex;
+  gap: 0;
+  margin: 2rem 0 0 0;
+  max-width: 900px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.tabButton {
+  flex: 1;
+  padding: 1.2rem 2rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #666;
+  position: relative;
+}
+
+.tabButton:hover {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+}
+
+.tabButton.active {
+  background: white;
+  color: #667eea;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.tabButton.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.tabContent {
+  animation: fadeIn 0.3s ease;
+  width: 100%;
+  max-width: 900px;
+}
+
+.tabContent .uploadSection {
+  border-radius: 0 0 12px 12px;
+  margin-bottom: 2rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 모바일에서 탭 대응 */
+@media (max-width: 768px) {
+  .tabNavigation {
+    margin: 1rem 0 0 0;
+  }
+  
+  .tabButton {
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+  }
+}
